@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSGO 皮肤量化交易看板</title>
+    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --card: #1a1d2e;
+            --card-hover: #1f2338;
+            --border: #2a2d3e;
+            --text: #e1e4ed;
+            --text-dim: #8b8fa3;
+            --accent: #6366f1;
+            --green: #22c55e;
+            --red: #ef4444;
+            --yellow: #f59e0b;
+            --blue: #3b82f6;
+            --orange: #f97316;
+            --radius: 10px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #1a1d2e 0%, #1e1b4b 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.3px; }
+        .header h1 .icon { margin-right: 8px; }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .header .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .header .status-dot.online { background: var(--green); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+        .btn {
+            padding: 7px 16px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--card);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: var(--card-hover); border-color: var(--accent); }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .btn-primary:hover { opacity: 0.9; }
+
+        /* Layout */
+        .container { max-width: 1440px; margin: 0 auto; padding: 20px 24px; }
+
+        /* Stats Row */
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px 20px;
+        }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .stat-card .value { font-size: 1.8rem; font-weight: 700; }
+        .stat-card .value.green { color: var(--green); }
+        .stat-card .value.blue { color: var(--blue); }
+        .stat-card .value.yellow { color: var(--yellow); }
+        .stat-card .value.red { color: var(--red); }
+
+        /* Main grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 1000px) { .main-grid { grid-template-columns: 1fr; } }
+        .main-grid .span-2 { grid-column: 1 / -1; }
+
+        /* Cards */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .card-header .badge {
+            font-size: 0.7rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .badge-strong { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+        .badge-watch { background: rgba(245, 158, 11, 0.15); color: var(--yellow); }
+        .card-body { padding: 16px 20px; }
+        .card-body.no-padding { padding: 0; }
+
+        /* Signal list */
+        .signal-item {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .signal-item:last-child { border-bottom: none; }
+        .signal-item:hover { background: var(--card-hover); }
+        .signal-item .sig-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+        .signal-item .sig-name { font-weight: 600; font-size: 0.9rem; flex: 1; }
+        .signal-item .sig-tag {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+        .tag-A { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; }
+        .tag-D { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+        .tag-AD { background: rgba(249, 115, 22, 0.15); color: #fdba74; }
+        .signal-item .sig-score {
+            font-size: 1.1rem;
+            font-weight: 700;
+            min-width: 36px;
+            text-align: center;
+        }
+        .score-high { color: var(--red); }
+        .score-mid { color: var(--yellow); }
+        .signal-item .sig-reasons { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+        .signal-item .sig-reasons li { margin-bottom: 2px; list-style: none; }
+        .signal-item .sig-reasons li::before { content: "▸ "; color: var(--accent); }
+        .signal-item .sig-suggestion {
+            font-size: 0.75rem;
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: rgba(99, 102, 241, 0.06);
+            border-radius: 6px;
+            border-left: 3px solid var(--accent);
+            line-height: 1.5;
+        }
+        .sig-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-dim);
+        }
+
+        /* Sector heatmap */
+        .sector-grid { display: flex; flex-direction: column; gap: 10px; }
+        .sector-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 6px;
+            cursor: default;
+        }
+        .sector-row .sector-name { font-weight: 600; font-size: 0.85rem; min-width: 120px; }
+        .sector-row .sector-bar-wrap { flex: 1; height: 22px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; position: relative; }
+        .sector-row .sector-bar {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            padding-left: 8px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #fff;
+        }
+        .sector-row .sector-val { font-size: 0.9rem; font-weight: 700; min-width: 60px; text-align: right; }
+
+        /* Anomalies */
+        .anomaly-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 14px;
+            font-size: 0.82rem;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .anomaly-item:last-child { border-bottom: none; }
+        .anomaly-item .anom-name { flex: 1; }
+        .anomaly-item .anom-dir {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .dir-up { background: rgba(239, 68, 68, 0.12); color: var(--red); }
+        .dir-down { background: rgba(34, 197, 94, 0.12); color: var(--green); }
+        .anomaly-item .anom-ratio { font-weight: 600; font-size: 0.85rem; }
+
+        /* Chart controls */
+        .chart-toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+        .chart-toolbar select {
+            padding: 6px 12px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        /* Loading */
+        .loading { text-align: center; padding: 30px; color: var(--text-dim); }
+        .spinner {
+            width: 24px; height: 24px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Prices row for signal cards */
+        .sig-metrics {
+            display: flex;
+            gap: 16px;
+            font-size: 0.78rem;
+            margin-top: 6px;
+            color: var(--text-dim);
+        }
+        .sig-metrics span { white-space: nowrap; }
+    </style>
+</head>
+<body>
+
+<header class="header">
+    <h1><span class="icon">🔫</span>CSGO 皮肤量化交易看板</h1>
+    <div class="header-actions">
+        <span class="status-dot online"></span>
+        <span style="font-size:0.8rem;color:var(--text-dim);margin-right:8px;">实时</span>
+        <button class="btn" onclick="collectData()" id="btn-collect">📥 采集数据</button>
+        <button class="btn" onclick="refreshAll()">🔄 刷新</button>
+    </div>
+</header>
+
+<div class="container">
+    <!-- 总览统计 -->
+    <div class="stats-row" id="stats-row">
+        <div class="stat-card"><div class="label">分析皮肤数</div><div class="value" id="stat-total">--</div></div>
+        <div class="stat-card"><div class="label">⚡ 交易信号</div><div class="value yellow" id="stat-signals">--</div></div>
+        <div class="stat-card"><div class="label">🟢 强烈信号</div><div class="value green" id="stat-strong">--</div></div>
+        <div class="stat-card"><div class="label">🔥 A+D 共振</div><div class="value red" id="stat-ad">--</div></div>
+        <div class="stat-card"><div class="label">📊 信号A（吸筹）</div><div class="value blue" id="stat-a">--</div></div>
+        <div class="stat-card"><div class="label">📈 信号D（补涨）</div><div class="value blue" id="stat-d">--</div></div>
+    </div>
+
+    <!-- 主体区域 -->
+    <div class="main-grid">
+        <!-- 左：K线图 -->
+        <div class="card">
+            <div class="card-header">
+                📈 价格走势 & 技术指标
+                <div class="chart-toolbar">
+                    <select id="skin-selector" onchange="loadChart()">
+                        <option value="">-- 选择皮肤 --</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body no-padding" id="chart-container">
+                <div class="loading"><div class="spinner"></div>选择皮肤查看走势</div>
+            </div>
+        </div>
+
+        <!-- 右：信号面板 -->
+        <div class="card">
+            <div class="card-header">
+                🔔 交易信号
+                <span class="badge badge-strong" id="sig-count-badge">--</span>
+            </div>
+            <div class="card-body no-padding" id="signals-panel" style="max-height:540px;overflow-y:auto;">
+                <div class="loading"><div class="spinner"></div>加载中...</div>
+            </div>
+        </div>
+
+        <!-- 板块热力图 -->
+        <div class="card">
+            <div class="card-header">🗺️ 板块热力图 — 各系列近30日表现</div>
+            <div class="card-body" id="heatmap-panel">
+                <div class="loading"><div class="spinner"></div>加载中...</div>
+            </div>
+        </div>
+
+        <!-- 成交量异动 -->
+        <div class="card">
+            <div class="card-header">📊 成交量异动监控（当日 vs 10日均量）</div>
+            <div class="card-body no-padding" id="anomalies-panel" style="max-height:400px;overflow-y:auto;">
+                <div class="loading"><div class="spinner"></div>加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🚨 实时异动监控面板 -->
+    <div class="card" style="margin-bottom:20px;border-color:rgba(239,68,68,0.3);">
+        <div class="card-header" style="background:rgba(239,68,68,0.06);">
+            🚨 实时异动监控
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span class="badge badge-strong" id="monitor-badge">--</span>
+                <button class="btn btn-primary" onclick="scanMonitor()" style="font-size:0.75rem;">🔍 立即扫描</button>
+                <span style="font-size:0.7rem;color:var(--text-dim);" id="monitor-time">--</span>
+            </div>
+        </div>
+        <div class="card-body no-padding" id="monitor-panel" style="max-height:500px;overflow-y:auto;">
+            <div class="loading"><div class="spinner"></div>加载监控数据...</div>
+        </div>
+    </div>
+
+    <!-- 🤖 AI 智能解读 -->
+    <div class="card" style="margin-bottom:20px;border-color:rgba(99,102,241,0.35);">
+        <div class="card-header" style="background:rgba(99,102,241,0.06);">
+            🤖 AI 智能解读
+            <div style="display:flex;gap:8px;">
+                <button class="btn" onclick="askAI('', '')" style="font-size:0.75rem;">📊 解读当前市场</button>
+                <button class="btn" onclick="askAIForCurrentSkin()" style="font-size:0.75rem;">🔍 解读当前皮肤</button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div style="display:flex;gap:10px;margin-bottom:12px;">
+                <input id="ai-question" placeholder="也可以直接提问，例如：哪些皮肤最值得关注？有什么风险？"
+                       style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;">
+                <button class="btn btn-primary" onclick="askAIFromInput()">发送</button>
+            </div>
+            <div id="ai-answer" style="font-size:0.85rem;line-height:1.7;white-space:pre-wrap;min-height:40px;">
+                <span style="color:var(--text-dim);">点击上方按钮，让 AI 解读当前市场信号（需要先配置 AI_API_KEY）。</span>
+            </div>
+            <div id="ai-notice" style="font-size:0.75rem;color:var(--yellow);margin-top:8px;white-space:pre-wrap;"></div>
+        </div>
+    </div>
+
+    <!-- 📰 AI 市场每日早报 -->
+    <div class="card" style="margin-bottom:20px;border-color:rgba(34,197,94,0.35);">
+        <div class="card-header" style="background:rgba(34,197,94,0.06);">
+            📰 AI 市场每日早报
+            <button class="btn btn-primary" onclick="generateReport()" style="font-size:0.75rem;">📰 生成今日早报</button>
+        </div>
+        <div class="card-body">
+            <div id="report-content" style="font-size:0.85rem;line-height:1.8;white-space:pre-wrap;min-height:60px;background:rgba(0,0,0,0.15);border:1px solid var(--border);border-radius:6px;padding:14px 16px;">
+                <span style="color:var(--text-dim);">点击「生成今日早报」，AI 会基于当前市场数据自动撰写一份早报。</span>
+            </div>
+            <div id="report-notice" style="font-size:0.75rem;color:var(--yellow);margin-top:8px;white-space:pre-wrap;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// 全局状态
+// ============================================================
+let allSkins = [];
+let currentChartSkin = null;
+
+// ============================================================
+// 初始化
+// ============================================================
+async function init() {
+    await Promise.all([
+        loadOverview(),
+        loadSignals(),
+        loadSkins(),
+        loadHeatmap(),
+        loadAnomalies(),
+        loadMonitorAlerts(),
+    ]);
+}
+
+async function refreshAll() {
+    try {
+        await fetch('/api/refresh');
+    } catch(e) { /* ignore */ }
+    init();
+}
+
+async function collectData() {
+    const btn = document.getElementById('btn-collect');
+    const originalText = btn.textContent;
+    btn.textContent = '⏳ 采集中...';
+    btn.disabled = true;
+
+    try {
+        const resp = await fetch('/api/collect');
+        const data = await resp.json();
+        if (data.ok) {
+            alert('数据采集已启动！这可能需要几分钟，请等待后点击刷新查看结果。');
+            checkCollectStatus();
+        } else {
+            alert('采集失败: ' + data.error);
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    } catch(e) {
+        alert('采集请求失败: ' + e.message);
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function checkCollectStatus() {
+    const btn = document.getElementById('btn-collect');
+    const resp = await fetch('/api/collect/status');
+    const data = await resp.json();
+    
+    if (data.collecting) {
+        setTimeout(checkCollectStatus, 3000);
+    } else {
+        btn.textContent = '📥 采集数据';
+        btn.disabled = false;
+        alert('数据采集完成！正在刷新看板...');
+        refreshAll();
+    }
+}
+
+// ============================================================
+// 总览
+// ============================================================
+async function loadOverview() {
+    try {
+        const resp = await fetch('/api/overview');
+        const data = await resp.json();
+        if (!data.ok) return;
+        document.getElementById('stat-total').textContent = data.total_skins;
+        document.getElementById('stat-signals').textContent = data.total_signals;
+        document.getElementById('stat-strong').textContent = data.strong_signals;
+        document.getElementById('stat-ad').textContent = data.signal_ad_count;
+        document.getElementById('stat-a').textContent = data.signal_a_count;
+        document.getElementById('stat-d').textContent = data.signal_d_count;
+    } catch(e) {
+        console.error('loadOverview:', e);
+    }
+}
+
+// ============================================================
+// 皮肤列表 (填充下拉框)
+// ============================================================
+async function loadSkins() {
+    try {
+        const resp = await fetch('/api/skins');
+        const data = await resp.json();
+        if (!data.ok) return;
+        allSkins = data.skins;
+
+        const sel = document.getElementById('skin-selector');
+        sel.innerHTML = '<option value="">-- 选择皮肤 --</option>';
+        data.skins.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.name;
+            const prefix = s.has_signal ? '⚡ ' : '';
+            opt.textContent = prefix + s.name;
+            sel.appendChild(opt);
+        });
+
+        // 自动选择第一个有信号的
+        const firstSig = data.skins.find(s => s.has_signal);
+        if (firstSig) {
+            sel.value = firstSig.name;
+            loadChart();
+        }
+    } catch(e) {
+        console.error('loadSkins:', e);
+    }
+}
+
+// ============================================================
+// K线图表
+// ============================================================
+async function loadChart() {
+    const skinName = document.getElementById('skin-selector').value;
+    if (!skinName) return;
+
+    currentChartSkin = skinName;
+
+    const container = document.getElementById('chart-container');
+    container.innerHTML = '<div class="loading"><div class="spinner"></div>加载图表...</div>';
+
+    try {
+        const resp = await fetch('/api/skin/' + encodeURIComponent(skinName));
+        const data = await resp.json();
+        if (!data.ok) {
+            container.innerHTML = `<div class="sig-empty">⚠️ ${data.error}</div>`;
+            return;
+        }
+
+        const d = data.data;
+        const dates = d.dates;
+
+        // === 图1: 价格走势 + 布林带 + 均线 ===
+        const tracePrice = {
+            type: 'scatter', mode: 'lines', name: '价格',
+            x: dates, y: d.price,
+            line: { color: '#e1e4ed', width: 1.8 },
+            hovertemplate: '%{x}<br>¥%{y:.2f}<extra></extra>',
+        };
+        const traceBBUpper = { type: 'scatter', mode: 'lines', name: '布林上轨', x: dates, y: d.bb_upper, line: { color: 'rgba(99,102,241,0.4)', width: 1, dash: 'dash' }, showlegend: true };
+        const traceBBMid = { type: 'scatter', mode: 'lines', name: '布林中轨', x: dates, y: d.bb_middle, line: { color: 'rgba(139,143,163,0.5)', width: 1 }, showlegend: true };
+        const traceBBLower = { type: 'scatter', mode: 'lines', name: '布林下轨', x: dates, y: d.bb_lower, line: { color: 'rgba(99,102,241,0.4)', width: 1, dash: 'dash' }, showlegend: true };
+        const traceMA5 = { type: 'scatter', mode: 'lines', name: 'MA5', x: dates, y: d.ma_5, line: { color: '#f59e0b', width: 1 }, visible: 'legendonly' };
+        const traceMA10 = { type: 'scatter', mode: 'lines', name: 'MA10', x: dates, y: d.ma_10, line: { color: '#f97316', width: 1 }, visible: 'legendonly' };
+        const traceMA30 = { type: 'scatter', mode: 'lines', name: 'MA30', x: dates, y: d.ma_30, line: { color: '#ef4444', width: 1.5 } };
+
+        const layoutPrice = {
+            title: { text: `${skinName} — 价格走势`, font: { size: 14, color: '#e1e4ed' } },
+            xaxis: { gridcolor: 'rgba(255,255,255,0.06)', showgrid: true, color: '#8b8fa3' },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.06)', showgrid: true, color: '#8b8fa3', title: '价格 (¥)', side: 'right' },
+            margin: { l: 50, r: 60, t: 40, b: 30 },
+            paper_bgcolor: '#1a1d2e',
+            plot_bgcolor: '#1a1d2e',
+            font: { color: '#8b8fa3' },
+            legend: { x: 0.01, y: 0.99, bgcolor: 'rgba(0,0,0,0.3)', font: { size: 10 } },
+            height: 380,
+            hovermode: 'x unified',
+        };
+
+        // === 图2: 成交量 ===
+        const colors = d.price.map((p, i) => i > 0 && p >= d.price[i-1] ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.5)');
+        colors[0] = 'rgba(34,197,94,0.5)';
+        const traceVol = { type: 'bar', name: '成交量', x: dates, y: d.volume, marker: { color: colors }, showlegend: false, yaxis: 'y' };
+        const traceVolMA = { type: 'scatter', mode: 'lines', name: '均量(10)', x: dates, y: d.volume_ma_10, line: { color: '#f59e0b', width: 1.2 }, showlegend: false };
+
+        const layoutVol = {
+            xaxis: { gridcolor: 'rgba(255,255,255,0.06)', showgrid: true, color: '#8b8fa3' },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.06)', showgrid: true, color: '#8b8fa3', title: '成交量' },
+            margin: { l: 50, r: 20, t: 10, b: 30 },
+            paper_bgcolor: '#1a1d2e',
+            plot_bgcolor: '#1a1d2e',
+            font: { color: '#8b8fa3' },
+            height: 160,
+        };
+
+        // === 图3: RSI ===
+        const traceRSI = { type: 'scatter', mode: 'lines', name: 'RSI(14)', x: dates, y: d.rsi, line: { color: '#a78bfa', width: 1.5 } };
+        const traceRSI70 = { type: 'scatter', mode: 'lines', name: '超买(70)', x: dates, y: Array(dates.length).fill(70), line: { color: 'rgba(239,68,68,0.3)', width: 1, dash: 'dot' }, showlegend: false };
+        const traceRSI30 = { type: 'scatter', mode: 'lines', name: '超卖(30)', x: dates, y: Array(dates.length).fill(30), line: { color: 'rgba(34,197,94,0.3)', width: 1, dash: 'dot' }, showlegend: false };
+
+        const layoutRSI = {
+            xaxis: { gridcolor: 'rgba(255,255,255,0.06)', showgrid: true, color: '#8b8fa3' },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.06)', showgrid: true, color: '#8b8fa3', range: [0, 100] },
+            margin: { l: 50, r: 20, t: 30, b: 30 },
+            paper_bgcolor: '#1a1d2e',
+            plot_bgcolor: '#1a1d2e',
+            font: { color: '#8b8fa3' },
+            height: 150,
+            shapes: [
+                { type: 'rect', xref: 'paper', y0: 70, y1: 100, x0: 0, x1: 1, fillcolor: 'rgba(239,68,68,0.04)', line: { width: 0 } },
+                { type: 'rect', xref: 'paper', y0: 0, y1: 30, x0: 0, x1: 1, fillcolor: 'rgba(34,197,94,0.04)', line: { width: 0 } },
+            ],
+        };
+
+        // === 图4: MACD ===
+        const macdColors = d.macd_hist.map(v => v >= 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)');
+        const traceMACDHist = { type: 'bar', name: 'MACD柱', x: dates, y: d.macd_hist, marker: { color: macdColors }, showlegend: false };
+        const traceMACD = { type: 'scatter', mode: 'lines', name: 'MACD', x: dates, y: d.macd, line: { color: '#3b82f6', width: 1.2 } };
+        const traceMACDSig = { type: 'scatter', mode: 'lines', name: '信号', x: dates, y: d.macd_signal, line: { color: '#f59e0b', width: 1.2 } };
+
+        const layoutMACD = {
+            xaxis: { gridcolor: 'rgba(255,255,255,0.06)', showgrid: true, color: '#8b8fa3' },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.06)', showgrid: true, color: '#8b8fa3' },
+            margin: { l: 50, r: 20, t: 30, b: 30 },
+            paper_bgcolor: '#1a1d2e',
+            plot_bgcolor: '#1a1d2e',
+            font: { color: '#8b8fa3' },
+            height: 150,
+        };
+
+        // 合并所有图表
+        const config = {
+            responsive: true,
+            displayModeBar: true,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'],
+            displaylogo: false,
+        };
+
+        const chartDiv = document.createElement('div');
+        chartDiv.id = 'chart-inner';
+        container.innerHTML = '';
+        container.appendChild(chartDiv);
+
+        // 信号信息
+        if (d.signal) {
+            const sigDiv = document.createElement('div');
+            sigDiv.style.cssText = 'padding:12px 20px;border-top:1px solid var(--border);background:rgba(99,102,241,0.04);';
+            const tagClass = d.signal.type === 'A+D' ? 'tag-AD' : d.signal.type === 'A' ? 'tag-A' : 'tag-D';
+            sigDiv.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                    <span class="sig-tag ${tagClass}">信号${d.signal.type}</span>
+                    <span style="font-weight:700;font-size:1.1rem;color:${d.signal.score>=65?'var(--red)':'var(--yellow)'};">${d.signal.score}分</span>
+                    <span style="font-size:0.75rem;color:var(--text-dim);">${d.signal.level==='strong'?'🟢强烈':'🟡关注'}</span>
+                </div>
+                <div style="font-size:0.78rem;color:var(--text-dim);">${d.signal.reasons.join(' | ')}</div>
+                <div style="font-size:0.78rem;margin-top:6px;padding:8px 12px;background:rgba(99,102,241,0.06);border-radius:6px;border-left:3px solid var(--accent);">${d.signal.suggestion}</div>
+            `;
+            container.appendChild(sigDiv);
+        }
+
+        Plotly.newPlot(chartDiv, [
+            tracePrice, traceBBUpper, traceBBMid, traceBBLower, traceMA5, traceMA10, traceMA30,
+        ], layoutPrice, config);
+
+        const volDiv = document.createElement('div');
+        volDiv.id = 'vol-chart';
+        container.appendChild(volDiv);
+        Plotly.newPlot(volDiv, [traceVol, traceVolMA], layoutVol, config);
+
+        const rsiDiv = document.createElement('div');
+        rsiDiv.id = 'rsi-chart';
+        container.appendChild(rsiDiv);
+        Plotly.newPlot(rsiDiv, [traceRSI, traceRSI70, traceRSI30], layoutRSI, config);
+
+        const macdDiv = document.createElement('div');
+        macdDiv.id = 'macd-chart';
+        container.appendChild(macdDiv);
+        Plotly.newPlot(macdDiv, [traceMACDHist, traceMACD, traceMACDSig], layoutMACD, config);
+
+    } catch(e) {
+        container.innerHTML = `<div class="sig-empty">⚠️ 加载失败: ${e.message}</div>`;
+    }
+}
+
+// ============================================================
+// 信号面板
+// ============================================================
+async function loadSignals() {
+    const panel = document.getElementById('signals-panel');
+    try {
+        const resp = await fetch('/api/signals');
+        const data = await resp.json();
+        if (!data.ok) {
+            panel.innerHTML = `<div class="sig-empty">⚠️ ${data.error}</div>`;
+            return;
+        }
+
+        document.getElementById('sig-count-badge').textContent = data.count + ' 个信号';
+
+        if (data.signals.length === 0) {
+            panel.innerHTML = '<div class="sig-empty">📭 暂无交易信号<br><small>当前没有皮肤触发吸筹埋伏或板块补涨信号</small></div>';
+            return;
+        }
+
+        panel.innerHTML = data.signals.map((s, i) => {
+            const tagClass = s.signal_type === 'A+D' ? 'tag-AD' : s.signal_type === 'A' ? 'tag-A' : 'tag-D';
+            const scoreClass = s.score >= 70 ? 'score-high' : s.score >= 50 ? 'score-mid' : '';
+            const levelEmoji = s.level === 'strong' ? '🟢' : '🟡';
+
+            let metricsHtml = '';
+            if (s.metrics) {
+                const items = [];
+                if (s.metrics.latest_price) items.push(`💰 ¥${s.metrics.latest_price}`);
+                if (s.metrics.amplitude !== undefined) items.push(`振幅 ${s.metrics.amplitude}%`);
+                if (s.metrics.vol_ratio !== undefined) items.push(`量比 ${s.metrics.vol_ratio}x`);
+                if (s.metrics.own_return !== undefined) items.push(`涨幅 ${s.metrics.own_return}%`);
+                if (s.metrics.target_price !== undefined) items.push(`目标 ¥${s.metrics.target_price}`);
+                if (s.metrics.rallied_peers) items.push(`已涨: ${s.metrics.rallied_peers}`);
+                metricsHtml = `<div class="sig-metrics">${items.map(it => `<span>${it}</span>`).join('')}</div>`;
+            }
+
+            return `
+                <div class="signal-item" onclick="selectSkin('${escapeHtml(s.skin_name)}')">
+                    <div class="sig-header">
+                        <span class="sig-score ${scoreClass}">${s.score}</span>
+                        <span class="sig-name">${levelEmoji} ${escapeHtml(s.skin_name)}</span>
+                        <span class="sig-tag ${tagClass}">${s.signal_type}</span>
+                    </div>
+                    ${metricsHtml}
+                    <ul class="sig-reasons">
+                        ${s.reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('')}
+                    </ul>
+                    <div class="sig-suggestion">${escapeHtml(s.suggestion)}</div>
+                </div>
+            `;
+        }).join('');
+
+    } catch(e) {
+        panel.innerHTML = `<div class="sig-empty">⚠️ 加载失败: ${e.message}</div>`;
+    }
+}
+
+// ============================================================
+// 板块热力图
+// ============================================================
+async function loadHeatmap() {
+    const panel = document.getElementById('heatmap-panel');
+    try {
+        const resp = await fetch('/api/heatmap');
+        const data = await resp.json();
+        if (!data.ok) {
+            panel.innerHTML = `<div class="sig-empty">⚠️ ${data.error}</div>`;
+            return;
+        }
+
+        const collections = data.collections;
+        const entries = Object.entries(collections);
+        if (entries.length === 0) {
+            panel.innerHTML = '<div class="sig-empty">暂无板块数据</div>';
+            return;
+        }
+
+        // 找最大绝对值用于配色
+        let maxAbs = 0;
+        entries.forEach(([_, v]) => {
+            const absRet = Math.abs(v.avg_return);
+            if (absRet > maxAbs) maxAbs = absRet;
+        });
+
+        panel.innerHTML = `
+            <div class="sector-grid">
+                ${entries.map(([name, v]) => {
+                    const ret = v.avg_return;
+                    const pct = Math.min(Math.abs(ret) / Math.max(maxAbs, 1) * 100, 100);
+                    const barColor = ret >= 0
+                        ? `rgba(34,197,94,${0.3 + Math.abs(ret)/Math.max(maxAbs,1) * 0.7})`
+                        : `rgba(239,68,68,${0.3 + Math.abs(ret)/Math.max(maxAbs,1) * 0.7})`;
+                    const skinTags = v.skins.map(s =>
+                        `<span style="font-size:0.7rem;opacity:0.7;">${s.name}(${s.ret_30d >= 0 ? '+' : ''}${s.ret_30d}%)</span>`
+                    ).join(' ');
+
+                    return `
+                        <div class="sector-row" title="${skinTags}">
+                            <span class="sector-name">${name}</span>
+                            <div class="sector-bar-wrap">
+                                <div class="sector-bar" style="width:${Math.max(pct, 3)}%;background:${barColor};">
+                                    ${Math.abs(pct) > 8 ? (ret >= 0 ? '+' : '') + ret + '%' : ''}
+                                </div>
+                            </div>
+                            <span class="sector-val" style="color:${ret>=0?'var(--green)':'var(--red)'};">
+                                ${ret >= 0 ? '+' : ''}${ret}%
+                            </span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    } catch(e) {
+        panel.innerHTML = `<div class="sig-empty">⚠️ 加载失败: ${e.message}</div>`;
+    }
+}
+
+// ============================================================
+// 成交量异动
+// ============================================================
+async function loadAnomalies() {
+    const panel = document.getElementById('anomalies-panel');
+    try {
+        const resp = await fetch('/api/anomalies');
+        const data = await resp.json();
+        if (!data.ok) {
+            panel.innerHTML = `<div class="sig-empty">⚠️ ${data.error}</div>`;
+            return;
+        }
+
+        if (data.anomalies.length === 0) {
+            panel.innerHTML = '<div class="sig-empty">📭 暂无成交量异动</div>';
+            return;
+        }
+
+        panel.innerHTML = data.anomalies.map(a => {
+            const dirClass = a.direction === '放量' ? 'dir-up' : 'dir-down';
+            return `
+                <div class="anomaly-item" style="cursor:pointer;" onclick="selectSkin('${escapeHtml(a.skin_name)}')">
+                    <span class="anom-name">${escapeHtml(a.skin_name)}</span>
+                    <span class="anom-dir ${dirClass}">${a.direction}</span>
+                    <span class="anom-ratio" style="color:${a.vol_ratio>=1?'var(--red)':'var(--green)'};">${a.vol_ratio}x</span>
+                    <span style="font-size:0.7rem;color:var(--text-dim);">${a.latest_volume.toLocaleString()} / ${a.vol_ma.toLocaleString()}</span>
+                </div>
+            `;
+        }).join('');
+
+    } catch(e) {
+        panel.innerHTML = `<div class="sig-empty">⚠️ 加载失败: ${e.message}</div>`;
+    }
+}
+
+// ============================================================
+// 辅助
+// ============================================================
+function selectSkin(name) {
+    document.getElementById('skin-selector').value = name;
+    loadChart();
+    // 滚动到图表
+    document.getElementById('chart-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// ============================================================
+// 🚨 实时异动监控
+// ============================================================
+async function loadMonitorAlerts() {
+    const panel = document.getElementById('monitor-panel');
+    try {
+        const resp = await fetch('/api/monitor/alerts');
+        const data = await resp.json();
+
+        if (!data.ok) {
+            panel.innerHTML = `<div class="sig-empty">⚠️ ${data.error}</div>`;
+            return;
+        }
+
+        document.getElementById('monitor-badge').textContent = data.count + ' 个异动';
+        document.getElementById('monitor-time').textContent = '更新于 ' + new Date().toLocaleTimeString();
+
+        if (data.alerts.length === 0) {
+            panel.innerHTML = '<div class="sig-empty">✅ 市场运行平稳，未检测到异常异动</div>';
+            return;
+        }
+
+        // 按严重度排序的颜色映射
+        const levelColors = {
+            'critical': { bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.4)', badge: '🔴 严重' },
+            'warning': { bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.3)', badge: '🟡 警告' },
+            'info': { bg: 'rgba(59,130,246,0.04)', border: 'rgba(59,130,246,0.2)', badge: '🔵 提示' },
+        };
+
+        const typeLabels = {
+            'price_surge': '📈 价格暴涨',
+            'price_crash': '📉 价格暴跌',
+            'volume_spike': '📊 成交量暴增',
+            'listings_drop': '🛒 在售锐减',
+            'listings_surge': '📦 在售暴增',
+            'multi_dimension': '🔥 多维度共振',
+        };
+
+        panel.innerHTML = data.alerts.map(a => {
+            const lc = levelColors[a.level] || levelColors.info;
+            return `
+                <div class="signal-item" style="border-left:4px solid ${lc.border};background:${lc.bg};cursor:pointer;"
+                     onclick="selectSkin('${escapeHtml(a.skin_name)}')">
+                    <div class="sig-header">
+                        <span class="sig-name">${lc.badge} ${escapeHtml(a.title)}</span>
+                        <span class="sig-tag" style="background:rgba(255,255,255,0.08);font-size:0.65rem;">${typeLabels[a.alert_type] || a.alert_type}</span>
+                    </div>
+                    <div style="font-size:0.78rem;color:var(--text-dim);margin:4px 0;">
+                        ${escapeHtml(a.description)}
+                    </div>
+                    <div class="sig-metrics" style="margin-top:6px;">
+                        ${Object.entries(a.metrics || {}).slice(0, 6).map(([k, v]) => {
+                            let label = k;
+                            if (k === 'change_24h_pct') label = '24h涨跌';
+                            if (k === 'volume_ratio') label = '量比';
+                            if (k === 'listings_change_pct') label = '挂单变化';
+                            if (k === 'latest_price') label = '现价';
+                            const valStr = typeof v === 'number' ? (k.includes('pct') || k.includes('change') ? (v >= 0 ? '+' : '') + v.toFixed(1) + '%' : k.includes('price') ? '¥' + v.toFixed(2) : v.toLocaleString()) : v;
+                            const valColor = typeof v === 'number' && (k.includes('pct') || k.includes('change')) ? (v >= 0 ? 'var(--red)' : 'var(--green)') : 'var(--text-dim)';
+                            return `<span><span style="opacity:0.6;">${label}:</span> <span style="color:${valColor};font-weight:600;">${valStr}</span></span>`;
+                        }).join('')}
+                    </div>
+                    ${a.suggestion ? `<div class="sig-suggestion">${escapeHtml(a.suggestion)}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+
+    } catch(e) {
+        panel.innerHTML = `<div class="sig-empty">⚠️ 加载失败: ${e.message}</div>`;
+    }
+}
+
+async function scanMonitor() {
+    const panel = document.getElementById('monitor-panel');
+    panel.innerHTML = '<div class="loading"><div class="spinner"></div>正在扫描全市场数据...</div>';
+
+    try {
+        // 先采集最新数据
+        const collectResp = await fetch('/api/collect');
+        const collectData = await collectResp.json();
+        console.log('采集:', collectData);
+
+        // 再扫描异常
+        const scanResp = await fetch('/api/monitor/scan');
+        const scanData = await scanResp.json();
+        console.log('扫描:', scanData);
+
+        // 等待一小会确保数据更新
+        setTimeout(() => loadMonitorAlerts(), 1000);
+    } catch(e) {
+        panel.innerHTML = `<div class="sig-empty">⚠️ 扫描失败: ${e.message}</div>`;
+    }
+}
+
+// ============================================================
+// 🤖 AI 智能解读
+// ============================================================
+async function callAI(skinName, question) {
+    const answerDiv = document.getElementById('ai-answer');
+    const noticeDiv = document.getElementById('ai-notice');
+    answerDiv.innerHTML = '<div class="loading"><div class="spinner"></div>AI 正在分析市场...</div>';
+    noticeDiv.textContent = '';
+
+    try {
+        const resp = await fetch('/api/ai/interpret', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({skin_name: skinName, question: question})
+        });
+        const data = await resp.json();
+        if (!data.ok) {
+            answerDiv.innerHTML = `<span style="color:var(--red);">⚠️ ${escapeHtml(data.error)}</span>`;
+            return;
+        }
+        answerDiv.textContent = data.answer;
+        if (data.notice) {
+            noticeDiv.textContent = 'ℹ️ ' + data.notice;
+        }
+    } catch(e) {
+        answerDiv.innerHTML = `<span style="color:var(--red);">⚠️ 请求失败: ${escapeHtml(e.message)}</span>`;
+    }
+}
+
+function askAIFromInput() {
+    const q = document.getElementById('ai-question').value.trim();
+    callAI(currentChartSkin || '', q);
+}
+
+function askAI(skinName, question) {
+    callAI(skinName, question);
+}
+
+function askAIForCurrentSkin() {
+    const skinName = currentChartSkin || document.getElementById('skin-selector').value;
+    if (!skinName) {
+        alert('请先在图表中选择一个皮肤');
+        return;
+    }
+    callAI(skinName, '');
+}
+
+// ============================================================
+// 📰 AI 市场每日早报
+// ============================================================
+async function generateReport() {
+    const contentDiv = document.getElementById('report-content');
+    const noticeDiv = document.getElementById('report-notice');
+    contentDiv.innerHTML = '<div class="loading"><div class="spinner"></div>AI 正在撰写今日早报...</div>';
+    noticeDiv.textContent = '';
+
+    try {
+        const resp = await fetch('/api/ai/daily-report');
+        const data = await resp.json();
+        if (!data.ok) {
+            contentDiv.innerHTML = `<span style="color:var(--red);">⚠️ ${escapeHtml(data.error)}</span>`;
+            return;
+        }
+        contentDiv.textContent = data.report;
+        if (data.notice) {
+            noticeDiv.textContent = 'ℹ️ ' + data.notice;
+        }
+    } catch(e) {
+        contentDiv.innerHTML = `<span style="color:var(--red);">⚠️ 请求失败: ${escapeHtml(e.message)}</span>`;
+    }
+}
+
+// ============================================================
+// 页面加载完成后自动初始化
+// ============================================================
+init();
+</script>
+
+</body>
+</html>

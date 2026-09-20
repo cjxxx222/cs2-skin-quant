@@ -1,0 +1,190 @@
+{
+    "_comment": "SteamDT 及其他数据源 API 端点配置。抓包后填入实际地址即可。",
+    "_instructions": "打开 SteamDT 网站 → F12 开发者工具 → Network → XHR/Fetch → 刷新页面 → 复制请求URL和参数填入下方",
+
+    "sources": {
+        "steamdt": {
+            "enabled": true,
+            "base_url": "https://www.steamdt.com",
+
+            "endpoints": {
+                "market_items": {
+                    "method": "GET",
+                    "path": "/api/v2/market/items",
+                    "description": "获取市场物品列表（全量/分页）",
+                    "params": {
+                        "appid": "730",
+                        "type": "BROAD",
+                        "page": 1,
+                        "pageSize": 100,
+                        "sortBy": "volume",
+                        "order": "desc",
+                        "currency": "CNY"
+                    },
+                    "headers": {
+                        "Accept": "application/json",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    },
+                    "pagination": {
+                        "type": "offset",
+                        "param_page": "page",
+                        "param_size": "pageSize",
+                        "max_pages": 50
+                    },
+                    "response_mapping": {
+                        "data_path": "data.items",
+                        "total_path": "data.total",
+                        "fields": {
+                            "name": "name",
+                            "price": "price",
+                            "volume_24h": "volume24h",
+                            "listings": "listings",
+                            "change_percent": "changePercent",
+                            "icon_url": "iconUrl"
+                        }
+                    }
+                },
+
+                "item_detail": {
+                    "method": "GET",
+                    "path": "/api/v2/market/item/{item_id}",
+                    "description": "获取单个物品详情与历史",
+                    "params": {
+                        "appid": "730",
+                        "currency": "CNY"
+                    },
+                    "headers": {
+                        "Accept": "application/json"
+                    }
+                },
+
+                "item_history": {
+                    "method": "GET",
+                    "path": "/api/v2/market/item/{item_id}/history",
+                    "description": "获取单个物品价格历史",
+                    "params": {
+                        "days": 30,
+                        "currency": "CNY"
+                    },
+                    "headers": {
+                        "Accept": "application/json"
+                    }
+                },
+
+                "categories": {
+                    "method": "GET",
+                    "path": "/api/v2/market/categories",
+                    "description": "获取物品分类列表",
+                    "params": {
+                        "appid": "730"
+                    },
+                    "headers": {
+                        "Accept": "application/json"
+                    }
+                }
+            },
+
+            "categories": [
+                {"key": "collection", "name": "收藏品", "type": "COLLECTION"},
+                {"key": "case", "name": "武器箱", "type": "CASE"},
+                {"key": "sticker", "name": "贴纸/胶囊", "type": "STICKER"},
+                {"key": "other", "name": "其他", "type": "OTHER"}
+            ],
+
+            "rate_limit": {
+                "requests_per_second": 3,
+                "burst": 5,
+                "cooldown_seconds": 60
+            }
+        },
+
+        "steam_official": {
+            "enabled": false,
+            "base_url": "https://steamcommunity.com/market",
+            "description": "Steam 官方市场 API（备用源）",
+
+            "endpoints": {
+                "price_overview": {
+                    "method": "GET",
+                    "path": "/priceoverview/",
+                    "params": {
+                        "appid": "730",
+                        "currency": "23",
+                        "market_hash_name": "{item_name}"
+                    },
+                    "response_mapping": {
+                        "fields": {
+                            "price": "lowest_price",
+                            "volume": "volume",
+                            "median_price": "median_price"
+                        }
+                    }
+                },
+
+                "listings": {
+                    "method": "GET",
+                    "path": "/listings/730/{item_name_encoded}",
+                    "description": "获取单个物品挂单列表",
+                    "response_mapping": {
+                        "fields": {
+                            "total_count": "total_count",
+                            "lowest_price": "lowest_price"
+                        }
+                    }
+                }
+            },
+
+            "rate_limit": {
+                "requests_per_second": 1,
+                "burst": 3,
+                "cooldown_seconds": 120
+            }
+        },
+
+        "buff163": {
+            "enabled": false,
+            "base_url": "https://buff.163.com",
+            "description": "Buff163 市场（备用源，需要处理反爬）",
+
+            "endpoints": {
+                "market_items": {
+                    "method": "GET",
+                    "path": "/api/market/goods",
+                    "params": {
+                        "game": "csgo",
+                        "page_num": 1,
+                        "page_size": 100,
+                        "sort_by": "volume.desc"
+                    }
+                }
+            }
+        }
+    },
+
+    "scan_categories": [
+        {
+            "key": "collection",
+            "enabled": true,
+            "source": "steamdt",
+            "endpoint": "market_items",
+            "params_override": { "type": "COLLECTION", "pageSize": 200 },
+            "schedule": "hourly"
+        },
+        {
+            "key": "case",
+            "enabled": true,
+            "source": "steamdt",
+            "endpoint": "market_items",
+            "params_override": { "type": "CASE", "pageSize": 200 },
+            "schedule": "hourly"
+        },
+        {
+            "key": "sticker",
+            "enabled": true,
+            "source": "steamdt",
+            "endpoint": "market_items",
+            "params_override": { "type": "STICKER", "pageSize": 200 },
+            "schedule": "daily"
+        }
+    ]
+}

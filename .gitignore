@@ -1,0 +1,23 @@
+# ===== 密钥与本地配置（绝不提交）=====
+.env
+*.env
+config/.claude/
+.claude/settings.local.json
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+.venv/
+
+# ===== 数据备份（避免仓库膨胀）=====
+data/prices_backup_*.csv
+
+# ===== 编辑器 / 系统 =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
