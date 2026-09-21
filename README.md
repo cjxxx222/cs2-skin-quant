@@ -110,7 +110,7 @@ python main.py
 
 - **价格**：来自 SteamDT 单品 K 线接口，365 天真实日 K 数据
 - **挂单量 / 求购量**：来自 SteamDT 各平台价格接口，每日采集一次逐步积累历史
-- **覆盖**：15 款主流皮肤的 Field-Tested / Factory New 品相
+- **覆盖**：市面上全部主流皮肤的 Field-Tested / Factory New 品相
 
 ## 免责声明
 
