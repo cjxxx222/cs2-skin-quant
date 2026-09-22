@@ -1,0 +1,26 @@
+# ===== 密钥与本地配置（绝不提交）=====
+.env
+*.env
+.claude/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+*.egg-info/
+
+# ===== 运行期生成的数据（可由脚本重建，不入库）=====
+data/
+!data/.gitkeep
+
+# ===== 编辑器 / 系统 =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ===== 临时/调试文件（下划线前缀）=====
+_*
