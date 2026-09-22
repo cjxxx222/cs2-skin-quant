@@ -3,6 +3,23 @@ SteamDT 全市场 AI 问答系统 — 全局配置
 """
 
 import os
+import sys
+
+# ============================================================
+# Windows 控制台编码修复（必须在任何 print 之前执行）
+# ============================================================
+# 中文 Windows 的默认控制台编码是 GBK，无法输出 emoji，
+# 会导致 UnicodeEncodeError 崩溃。这里把标准输出/错误重定向为 UTF-8。
+# 放在 config.py 是因为所有模块都会 import 它，一处生效全局。
+if sys.platform == "win32":
+    import io
+    try:
+        if not isinstance(sys.stdout, io.TextIOWrapper) or sys.stdout.encoding != "utf-8":
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        if not isinstance(sys.stderr, io.TextIOWrapper) or sys.stderr.encoding != "utf-8":
+            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except (ValueError, AttributeError):
+        pass
 
 # ============================================================
 # 路径

@@ -28,6 +28,8 @@ from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import config  # noqa: F401  触发 Windows 控制台编码修复
+
 
 # ============================================================
 # 武器别名表
